@@ -65,13 +65,14 @@ Plain training is the forgetting, because the next lesson moves the same weights
 | EWC | Weight regularization | Save the weights after a lesson, mark which ones that lesson needed, and charge extra for moving those. |
 | LwF | Answer regularization | Freeze a copy of the network, and on each new photo pull the live network toward what that copy would say. |
 | A-GEM | A check on the step | Keep old photos only as a test of the step, and tilt the step when it would make those photos worse. |
+| Merged | All three pulls | On each new photo, charge for moving important weights, pull the answers toward a frozen copy, and tilt the step when stored old photos would get worse. |
 | Experts, told the lesson | A separate network per lesson | Freeze each lesson's network when it ends, and let the lesson tag choose which network answers. |
 | Experts, guessing the lesson | Same networks, no tag | The frozen networks stay, and a second network guesses the lesson from the photo, then itself forgets. |
 | Joint | All lessons at once | Shuffle every lesson into one pile, so no lesson arrives late enough to overwrite another. |
 
 ## Scores after each lesson
 
-![Seven heatmaps of class-incremental accuracy after each task.](results/figures/forgetting_matrices_class.png)
+![Eight heatmaps of class-incremental accuracy after each task.](results/figures/forgetting_matrices_class.png)
 
 On the ten-digit test, each square is the share of that lesson's test photos still answered correctly after the lesson named on the left, and yellow is a high score.
 
@@ -82,6 +83,7 @@ On the ten-digit test, each square is the share of that lesson's test photos sti
 | EWC | Old lessons fall to about 0, with a small remainder of about 0.13 on lesson 4. |
 | LwF | Pieces of the early lessons linger, then go dark, and the last lesson stays near 0.95. |
 | A-GEM | Old lessons fade instead of vanishing, and lesson 1 is still about 0.75 at the end. |
+| Merged | On the repeat that finished, the early lessons stay bright until the last lesson, and that last row goes dark, including the lesson just finished at 0.00. Two other repeats left the finite range during that last lesson. |
 | Experts, told | Every square stays near 1.00, because each lesson's network is never trained again. |
 | Experts, guessing | Later photos go to the newest network, so every earlier lesson ends at about 0. |
 
@@ -94,8 +96,8 @@ Each line is the average score on the lessons taught so far, and the pale band i
 | Panel | What the lines do |
 | --- | --- |
 | Told the lesson | Every method stays near 100% from the first lesson through the fifth. |
-| Even or odd | Plain training falls to 60.9%, replay stays at 93.4%, and the told expert stays next to the shuffled line at 98.2%. |
-| Name the digit | Plain training falls to about 20% by the second lesson and stays there, replay stays near 88%, and shuffled training finishes at 96.4%. |
+| Even or odd | Plain training falls to 60.9%, replay stays at 93.4%, the told expert stays next to the shuffled line at 98.2%, and the merged line ends at 68.7% with a wide band. |
+| Name the digit | Plain training falls to about 20% by the second lesson and stays there, replay stays near 88%, shuffled training finishes at 96.4%, and the merged line ends at 12.4% on the repeat that finished. |
 
 ## The end of all five lessons
 
@@ -115,6 +117,7 @@ Each number is the average of three repeats, and the second number in a cell is 
 | EWC | 97.7% ± 0.3, forgot 0.0 | 70.6% ± 2.0, forgot 21.1 | 21.7% ± 3.8, forgot 95.6 |
 | Experts, guessing | not run | 56.7% ± 0.4, forgot 53.0 | 19.6% ± 0.0, forgot 99.2 |
 | Naive | 98.4% ± 0.1, forgot 1.1 | 60.9% ± 0.9, forgot 47.6 | 19.5% ± 0.1, forgot 99.1 |
+| Merged | 96.9% ± 1.4, forgot 0.4 | 68.7% ± 12.6, forgot 8.6 | 12.4% on the finished repeat, forgot 37.7; two repeats left the finite range |
 
 The told expert uses about 1.3 million weights, and the shared network uses about 270 thousand.
 
@@ -134,6 +137,7 @@ Slowing forgetting is not how the forgetting is produced. Plain training produce
 | EWC | The new lesson still moves the weights, but the ones the old lesson needed cost more to move, so the new lesson mostly changes the others. | That extra charge does not stop the collapse, and the final score stays near plain training at 21.7%. |
 | Experts, guessing | The frozen networks stay, and a second network has to guess which one to ask. | The guesser sends photos to the newest network, so the score falls to 19.6%, the same collapse as plain training. |
 | Naive | The next lesson moves the same weights, so the old answers get worse. | Old lessons collapse, and the final score is 19.5%. |
+| Merged | The three pulls run on the same step: important weights cost more to move, the answers are pulled toward a frozen copy, and the step is tilted when stored old photos would get worse. | Two of three repeats left the finite range on the last lesson. The repeat that finished reached 12.4%, below plain training. |
 
 ## How fast lesson 1 disappears
 
@@ -147,6 +151,7 @@ This chart rescores lesson 1's test photos after every training step of lesson 2
 | EWC | Falls to 0% on the same early steps, then stays at 0%. |
 | Replay | Dips during those early steps, then climbs back near the top. |
 | A-GEM | Stays near the top for the whole of lesson 2. |
+| Merged | Dips to 0% at step 34, then climbs back to 99.9% and stays there. |
 
 ## Turning the EWC penalty up
 

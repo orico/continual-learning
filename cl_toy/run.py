@@ -24,6 +24,7 @@ from cl_toy.config import (
     SEEDS,
 )
 from cl_toy.data import PAIRS, SCENARIOS, load_mnist, split_by_pairs
+from cl_toy.methods import pieces_for
 from cl_toy.plots import (
     plot_accuracy_curves,
     plot_buffer_sweep,
@@ -36,8 +37,8 @@ from cl_toy.report import write_summary
 from cl_toy.train import run_sequence
 
 FORMAT = 2
-BASE_METHODS = ("naive", "joint", "replay", "ewc", "lwf", "agem", "experts")
-SPEED_METHODS = ("naive", "replay", "ewc", "agem")
+BASE_METHODS = ("naive", "joint", "replay", "ewc", "lwf", "agem", "merged", "experts")
+SPEED_METHODS = ("naive", "replay", "ewc", "agem", "merged")
 
 COMMON = dict(
     lr=LR,
@@ -75,12 +76,46 @@ def _run_sequence_with_overrides(train_tasks, test_tasks, **kwargs):
     return run_sequence(train_tasks, test_tasks, **options)
 
 
+def _note_divergence(runs: list[dict], partial_path: Path, tag: str, kwargs: dict, exc: RuntimeError) -> None:
+    """Remember a run whose loss left the finite range, and keep the other runs going."""
+    if "non-finite loss" not in str(exc):
+        raise exc
+    method = kwargs["method"]
+    pieces = pieces_for(method)
+    epochs = kwargs.get("epochs", EPOCHS)
+    ewc_lambda = kwargs["ewc_lambda"] if "ewc_lambda" in kwargs else (EWC_LAMBDA if pieces.ewc else None)
+    buffer_capacity = (
+        kwargs["buffer_capacity"]
+        if "buffer_capacity" in kwargs
+        else (BUFFER_CAPACITY if pieces.agem or method == "replay" else None)
+    )
+    note = {
+        "tag": tag,
+        "scenario": kwargs["scenario"],
+        "method": method,
+        "seed": kwargs.get("seed", 0),
+        "epochs": epochs,
+        "ewc_lambda": ewc_lambda,
+        "buffer_capacity": buffer_capacity,
+        "diverged": True,
+    }
+    print(
+        f"diverged {tag} {note['scenario']} {method} seed {note['seed']}: {exc}",
+        flush=True,
+    )
+    runs.append(note)
+    _save_partial(partial_path, runs)
+
+
 def execute(runs: list[dict], partial_path: Path, train_tasks, test_tasks, tag: str, **kwargs) -> dict:
     epochs = kwargs.get("epochs", EPOCHS)
     method = kwargs["method"]
-    ewc_lambda = kwargs["ewc_lambda"] if "ewc_lambda" in kwargs else (EWC_LAMBDA if method == "ewc" else None)
+    pieces = pieces_for(method)
+    ewc_lambda = kwargs["ewc_lambda"] if "ewc_lambda" in kwargs else (EWC_LAMBDA if pieces.ewc else None)
     buffer_capacity = (
-        kwargs["buffer_capacity"] if "buffer_capacity" in kwargs else (BUFFER_CAPACITY if method in ("replay", "agem") else None)
+        kwargs["buffer_capacity"]
+        if "buffer_capacity" in kwargs
+        else (BUFFER_CAPACITY if pieces.agem or method == "replay" else None)
     )
     probe = {
         "tag": tag,
@@ -212,34 +247,62 @@ def main() -> None:
         for scenario in SCENARIOS:
             train_tasks, test_tasks = prepared[scenario]
             for method in _methods(scenario):
-                execute(
-                    runs,
-                    partial_path,
-                    train_tasks,
-                    test_tasks,
-                    "main",
-                    scenario=scenario,
-                    method=method,
-                    seed=seed,
-                    epochs=args.epochs,
-                )
+                try:
+                    execute(
+                        runs,
+                        partial_path,
+                        train_tasks,
+                        test_tasks,
+                        "main",
+                        scenario=scenario,
+                        method=method,
+                        seed=seed,
+                        epochs=args.epochs,
+                    )
+                except RuntimeError as exc:
+                    _note_divergence(
+                        runs,
+                        partial_path,
+                        "main",
+                        {
+                            "scenario": scenario,
+                            "method": method,
+                            "seed": seed,
+                            "epochs": args.epochs,
+                        },
+                        exc,
+                    )
 
     speed_pairs = PAIRS[:2]
     speed_train = split_by_pairs(train_x, train_y, "class", speed_pairs)
     speed_test = split_by_pairs(test_x, test_y, "class", speed_pairs)
     for method in SPEED_METHODS:
-        execute(
-            runs,
-            partial_path,
-            speed_train,
-            speed_test,
-            "speed",
-            scenario="class",
-            method=method,
-            seed=0,
-            epochs=args.epochs,
-            watch_task0_on_task1=True,
-        )
+        try:
+            execute(
+                runs,
+                partial_path,
+                speed_train,
+                speed_test,
+                "speed",
+                scenario="class",
+                method=method,
+                seed=0,
+                epochs=args.epochs,
+                watch_task0_on_task1=True,
+            )
+        except RuntimeError as exc:
+            _note_divergence(
+                runs,
+                partial_path,
+                "speed",
+                {
+                    "scenario": "class",
+                    "method": method,
+                    "seed": 0,
+                    "epochs": args.epochs,
+                },
+                exc,
+            )
 
     train_tasks, test_tasks = prepared["task"]
     class_train, class_test = prepared["class"]
@@ -296,8 +359,24 @@ def main() -> None:
             "hidden": HIDDEN,
             "fisher_samples": FISHER_SAMPLES,
         },
-        "main": [run for run in runs if run["tag"] == "main" and run["seed"] in args.seeds and run["epochs"] == args.epochs],
-        "speed": [run for run in runs if run["tag"] == "speed" and run["epochs"] == args.epochs],
+        "main": [
+            run
+            for run in runs
+            if run["tag"] == "main"
+            and not run.get("diverged")
+            and run["seed"] in args.seeds
+            and run["epochs"] == args.epochs
+        ],
+        "diverged": [
+            run
+            for run in runs
+            if run.get("diverged") and run["seed"] in args.seeds and run.get("epochs") == args.epochs
+        ],
+        "speed": [
+            run
+            for run in runs
+            if run["tag"] == "speed" and not run.get("diverged") and run["epochs"] == args.epochs
+        ],
         "lambda": [run for run in runs if run["tag"] == "lambda" and run["epochs"] == args.epochs],
         "buffer": [run for run in runs if run["tag"] == "buffer" and run["epochs"] == args.epochs],
         "stream": [run for run in runs if run["tag"] == "stream"],

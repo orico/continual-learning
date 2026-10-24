@@ -16,6 +16,7 @@ from cl_toy.methods import (
     distillation_loss,
     estimate_fisher,
     ewc_penalty,
+    pieces_for,
     snapshot_params,
     stabilize_fisher,
 )
@@ -197,11 +198,13 @@ def run_sequence(
 ) -> dict:
     """Train one method on a sequence and return the forgetting matrix.
 
-    `method` is one of naive, joint, replay, ewc, lwf, agem, experts,
-    experts_routed. Experts keep a fresh frozen network per task. The routed
-    variant picks that network with a task classifier trained sequentially,
-    which is the setting where parameter isolation loses the task id.
+    `method` is one of naive, joint, replay, ewc, lwf, agem, merged, experts,
+    experts_routed. `merged` turns on the weight penalty, the frozen copy, and
+    the step check together. Experts keep a fresh frozen network per task. The
+    routed variant picks that network with a task classifier trained
+    sequentially, which is the setting where parameter isolation loses the task id.
     """
+    pieces = pieces_for(method)
     set_seed(seed)
     n_tasks = len(train_tasks)
     if len(test_tasks) != n_tasks:
@@ -217,7 +220,7 @@ def run_sequence(
     teacher: MLP | None = None
     speed: dict[str, list] = {"steps": [], "task0_accuracy": []}
 
-    if method in ("replay", "agem"):
+    if method == "replay" or pieces.agem:
         buffer = ClassBalancedBuffer(buffer_capacity, seed=seed)
 
     if method not in ("experts", "experts_routed"):
@@ -352,11 +355,11 @@ def run_sequence(
         )
         matrix.append(row)
 
-        if method in ("replay", "agem"):
+        if method == "replay" or pieces.agem:
             assert buffer is not None
             buffer.add_many(task["images"], task["labels"], task["task_ids"], task["digits"])
 
-        if method == "ewc":
+        if pieces.ewc:
             fisher = estimate_fisher(
                 model,
                 task["images"],
@@ -378,7 +381,7 @@ def run_sequence(
                 )
             )
 
-        if method == "lwf":
+        if pieces.lwf:
             teacher = clone_frozen(model)
 
     if method == "experts":
@@ -399,6 +402,60 @@ def run_sequence(
     )
 
 
+def current_loss(
+    model: MLP,
+    images: torch.Tensor,
+    labels: torch.Tensor,
+    task_ids: torch.Tensor,
+    scenario: str,
+    method: str,
+    anchors: list,
+    teacher: MLP | None,
+    task_index: int,
+    lwf_alpha: float,
+    lwf_temperature: float,
+) -> torch.Tensor:
+    """Cross-entropy on this batch, plus the protections this method turns on.
+
+    The weight penalty is added when that switch is on and a snapshot exists.
+    The frozen-copy pull is added when that switch is on and a teacher exists.
+    """
+    pieces = pieces_for(method)
+    logits = predict_logits(model, images, task_ids, scenario, method)
+    loss = F.cross_entropy(logits, labels)
+    if pieces.ewc and anchors:
+        loss = loss + ewc_penalty(model, anchors)
+    if pieces.lwf and teacher is not None:
+        loss = loss + lwf_alpha * distillation_loss(
+            model, teacher, images, task_index, lwf_temperature
+        )
+    return loss
+
+
+def memory_loss(
+    model: MLP,
+    images: torch.Tensor,
+    labels: torch.Tensor,
+    task_ids: torch.Tensor,
+    scenario: str,
+    method: str,
+    anchors: list,
+    teacher: MLP | None,
+    task_index: int,
+    lwf_alpha: float,
+    lwf_temperature: float,
+) -> torch.Tensor:
+    """Cross-entropy on stored photos. The penalties are not part of this loss."""
+    del anchors, teacher, task_index, lwf_alpha, lwf_temperature
+    logits = predict_logits(model, images, task_ids, scenario, method)
+    return F.cross_entropy(logits, labels)
+
+
+def _reject_nonfinite(loss: torch.Tensor, method: str, task_index: int) -> None:
+    if not torch.isfinite(loss):
+        raise RuntimeError(f"non-finite loss in {method} on task {task_index}")
+
+
 def _update(
     model: MLP,
     optimizer: torch.optim.Optimizer,
@@ -415,14 +472,38 @@ def _update(
     lwf_temperature: float,
 ) -> None:
     model.train()
-    if method == "agem" and buffer is not None and len(buffer) > 0:
-        logits = predict_logits(model, images, task_ids, scenario, method)
-        loss_current = F.cross_entropy(logits, labels)
+    pieces = pieces_for(method)
+    if pieces.agem and buffer is not None and len(buffer) > 0:
+        loss_current = current_loss(
+            model,
+            images,
+            labels,
+            task_ids,
+            scenario,
+            method,
+            anchors,
+            teacher,
+            task_index,
+            lwf_alpha,
+            lwf_temperature,
+        )
         drawn = buffer.sample(images.size(0))
         assert drawn is not None
         ref_images, ref_labels, ref_task_ids = drawn
-        ref_logits = predict_logits(model, ref_images, ref_task_ids, scenario, method)
-        loss_reference = F.cross_entropy(ref_logits, ref_labels)
+        loss_reference = memory_loss(
+            model,
+            ref_images,
+            ref_labels,
+            ref_task_ids,
+            scenario,
+            method,
+            anchors,
+            teacher,
+            task_index,
+            lwf_alpha,
+            lwf_temperature,
+        )
+        _reject_nonfinite(loss_current, method, task_index)
         apply_agem(model, optimizer, loss_current, loss_reference)
         return
 
@@ -435,16 +516,20 @@ def _update(
             task_ids = torch.cat([task_ids, extra_task_ids], dim=0)
 
     optimizer.zero_grad(set_to_none=True)
-    logits = predict_logits(model, images, task_ids, scenario, method)
-    loss = F.cross_entropy(logits, labels)
-    if anchors:
-        loss = loss + ewc_penalty(model, anchors)
-    if teacher is not None and method == "lwf":
-        loss = loss + lwf_alpha * distillation_loss(
-            model, teacher, images, task_index, lwf_temperature
-        )
-    if not torch.isfinite(loss):
-        raise RuntimeError(f"non-finite loss in {method} on task {task_index}")
+    loss = current_loss(
+        model,
+        images,
+        labels,
+        task_ids,
+        scenario,
+        method,
+        anchors,
+        teacher,
+        task_index,
+        lwf_alpha,
+        lwf_temperature,
+    )
+    _reject_nonfinite(loss, method, task_index)
     loss.backward()
     optimizer.step()
 

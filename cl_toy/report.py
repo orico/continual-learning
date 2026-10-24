@@ -317,7 +317,41 @@ def _checks(payload: dict, grouped: dict) -> list[dict]:
     return checks
 
 
-def _picture(grouped: dict) -> str:
+def _diverged_count(diverged: list, scenario: str, method: str) -> int:
+    return sum(
+        1
+        for run in diverged
+        if run.get("tag", "main") == "main" and run["scenario"] == scenario and run["method"] == method
+    )
+
+
+def _merged_sentence(grouped: dict, diverged: list) -> str:
+    """Report the merged scores, including repeats whose loss left the finite range."""
+    if ("task", "merged") not in grouped and ("domain", "merged") not in grouped and ("class", "merged") not in grouped:
+        return ""
+    task = _fmt_mean_std(_values(grouped, "task", "merged", "avg_accuracy")) if ("task", "merged") in grouped else None
+    domain = _fmt_mean_std(_values(grouped, "domain", "merged", "avg_accuracy")) if ("domain", "merged") in grouped else None
+    failed = _diverged_count(diverged, "class", "merged")
+    sentence = (
+        "Merged, which uses the weight penalty, the frozen copy, and the step check together, "
+    )
+    if task and domain:
+        sentence += f"reaches {task} when the lesson is known and {domain} on even versus odd. "
+    if failed and ("class", "merged") in grouped:
+        finished = len(grouped[("class", "merged")])
+        total = finished + failed
+        score = _fmt_mean_std(_values(grouped, "class", "merged", "avg_accuracy"))
+        sentence += (
+            f"On naming the digit, {failed} of {total} repeats left the finite range on the last lesson; "
+            f"the repeat that finished reached {score}. "
+        )
+    elif ("class", "merged") in grouped:
+        score = _fmt_mean_std(_values(grouped, "class", "merged", "avg_accuracy"))
+        sentence += f"On naming the digit it reaches {score}. "
+    return sentence
+
+
+def _picture(grouped: dict, diverged: list | None = None) -> str:
     """One paragraph of the measured pattern, computed from the same runs as the checks."""
     class_naive = _fmt_mean_std(_values(grouped, "class", "naive", "avg_accuracy"))
     class_replay = _fmt_mean_std(_values(grouped, "class", "replay", "avg_accuracy"))
@@ -341,6 +375,7 @@ def _picture(grouped: dict) -> str:
         f"A-GEM, which only constrains the step with stored gradients, reaches {class_agem}. "
         f"EWC at the default penalty stays near the naive result ({class_ewc}); "
         f"learning without forgetting, which stores no old images, reaches {class_lwf}. "
+        f"{_merged_sentence(grouped, diverged or [])}"
         f"A frozen expert per task scores {class_oracle} when it is handed the true task id, "
         f"and {class_routed} when a sequentially trained router has to guess that id."
     )
@@ -369,19 +404,21 @@ def _prose(payload: dict, grouped: dict, checks: list[dict]) -> list[str]:
         "",
         "## The picture",
         "",
-        _picture(grouped),
+        _picture(grouped, payload.get("diverged", [])),
         "",
         "## What the runs showed",
         "",
     ]
     for scenario in SCENARIO_ORDER:
         bits = []
+        diverged = payload.get("diverged", [])
         for method in (
             "naive",
             "replay",
             "ewc",
             "lwf",
             "agem",
+            "merged",
             "experts",
             "experts_routed",
             "joint",
@@ -390,11 +427,16 @@ def _prose(payload: dict, grouped: dict, checks: list[dict]) -> list[str]:
                 continue
             accuracy = _fmt_mean_std(_values(grouped, scenario, method, "avg_accuracy"))
             forgetting_values = _values(grouped, scenario, method, "avg_forgetting")
+            failed = _diverged_count(diverged, scenario, method)
             if forgetting_values.size:
                 forgetting = _fmt_mean_std(forgetting_values)
-                bits.append(f"{METHOD_LABELS[method]} accuracy {accuracy}, forgetting {forgetting}")
+                text = f"{METHOD_LABELS[method]} accuracy {accuracy}, forgetting {forgetting}"
             else:
-                bits.append(f"{METHOD_LABELS[method]} accuracy {accuracy}")
+                text = f"{METHOD_LABELS[method]} accuracy {accuracy}"
+            if failed:
+                finished = len(grouped[(scenario, method)])
+                text += f" ({failed} of {finished + failed} repeats left the finite range)"
+            bits.append(text)
         lines.append(f"{SCENARIO_LABELS[scenario]}: " + "; ".join(bits) + ".")
         lines.append("")
 

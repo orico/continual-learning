@@ -18,6 +18,7 @@ METHOD_LABELS = {
     "ewc": "EWC",
     "lwf": "LwF",
     "agem": "A-GEM",
+    "merged": "Merged",
     "experts": "Experts (oracle id)",
     "experts_routed": "Experts (predicted id)",
 }
@@ -34,6 +35,7 @@ METHOD_ORDER = [
     "ewc",
     "lwf",
     "agem",
+    "merged",
     "experts",
     "experts_routed",
     "joint",
@@ -102,7 +104,7 @@ def plot_forgetting_matrices(runs: list[dict], path: Path) -> None:
 
 def plot_accuracy_curves(runs: list[dict], path: Path) -> None:
     """Average accuracy on tasks seen so far, after each task."""
-    figure, axes = plt.subplots(1, 3, figsize=(14, 4), sharey=True)
+    figure, axes = plt.subplots(1, 3, figsize=(14, 5.4), sharey=True)
     grouped = _grouped(runs)
     for axis, scenario in zip(axes, ("task", "domain", "class")):
         for method in METHOD_ORDER:
@@ -134,9 +136,16 @@ def plot_accuracy_curves(runs: list[dict], path: Path) -> None:
         axis.set_xticks(range(1, 6))
         axis.set_ylim(0, 100)
         axis.grid(True, alpha=0.3)
-        axis.legend(fontsize=8, loc="lower left")
+        axis.legend(
+            fontsize=7,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.24),
+            ncol=2,
+            frameon=False,
+        )
     figure.suptitle("Accuracy while tasks arrive (band is the seed spread)")
     figure.tight_layout()
+    figure.subplots_adjust(bottom=0.32, top=0.88)
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=120)
     plt.close(figure)
@@ -146,11 +155,18 @@ def plot_final_bars(runs: list[dict], path: Path) -> None:
     """Final average accuracy and average forgetting by method and setting."""
     grouped = _grouped(runs)
     scenarios = ["task", "domain", "class"]
+    def _class_score(method: str) -> float:
+        matched = grouped.get(("class", method), [])
+        if not matched:
+            return -1.0
+        return float(np.mean([run["avg_accuracy"] for run in matched]))
+
     methods = [
         method
         for method in METHOD_ORDER
         if any(grouped.get((scenario, method)) for scenario in scenarios)
     ]
+    methods.sort(key=_class_score, reverse=True)
     figure, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
     x = np.arange(len(methods))
     width = 0.25

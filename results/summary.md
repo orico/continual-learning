@@ -6,15 +6,15 @@ Each run trains a 784-256-256 multilayer perceptron with SGD (learning rate 0.01
 
 ## The picture
 
-On this network, task-incremental naive training barely forgets (98.4% ± 0.1), because each pair keeps its own output head. Domain-incremental naive training, even versus odd with a shared head, ends at 60.9% ± 0.9; replay brings that to 93.4% ± 0.4. Class-incremental naive training is the collapse: final accuracy 19.5% ± 0.1, against joint training at 96.4% ± 0.2. Replay reaches 87.8% ± 0.0. A-GEM, which only constrains the step with stored gradients, reaches 65.3% ± 1.7. EWC at the default penalty stays near the naive result (21.7% ± 3.8); learning without forgetting, which stores no old images, reaches 26.0% ± 1.3. A frozen expert per task scores 98.9% ± 0.1 when it is handed the true task id, and 19.6% ± 0.0 when a sequentially trained router has to guess that id.
+On this network, task-incremental naive training barely forgets (98.4% ± 0.1), because each pair keeps its own output head. Domain-incremental naive training, even versus odd with a shared head, ends at 60.9% ± 0.9; replay brings that to 93.4% ± 0.4. Class-incremental naive training is the collapse: final accuracy 19.5% ± 0.1, against joint training at 96.4% ± 0.2. Replay reaches 87.8% ± 0.0. A-GEM, which only constrains the step with stored gradients, reaches 65.3% ± 1.7. EWC at the default penalty stays near the naive result (21.7% ± 3.8); learning without forgetting, which stores no old images, reaches 26.0% ± 1.3. Merged, which uses the weight penalty, the frozen copy, and the step check together, reaches 96.9% ± 1.4 when the lesson is known and 68.7% ± 12.6 on even versus odd. On naming the digit, 2 of 3 repeats left the finite range on the last lesson; the repeat that finished reached 12.4%. A frozen expert per task scores 98.9% ± 0.1 when it is handed the true task id, and 19.6% ± 0.0 when a sequentially trained router has to guess that id.
 
 ## What the runs showed
 
-Task-incremental: Naive accuracy 98.4% ± 0.1, forgetting 1.1% ± 0.1; Replay accuracy 98.5% ± 0.1, forgetting 0.6% ± 0.1; EWC accuracy 97.7% ± 0.3, forgetting -0.0% ± 0.0; LwF accuracy 99.2% ± 0.0, forgetting 0.1% ± 0.0; A-GEM accuracy 98.7% ± 0.1, forgetting 0.7% ± 0.1; Experts (oracle id) accuracy 99.1% ± 0.1, forgetting 0.0% ± 0.0; Joint accuracy 99.3% ± 0.1.
+Task-incremental: Naive accuracy 98.4% ± 0.1, forgetting 1.1% ± 0.1; Replay accuracy 98.5% ± 0.1, forgetting 0.6% ± 0.1; EWC accuracy 97.7% ± 0.3, forgetting -0.0% ± 0.0; LwF accuracy 99.2% ± 0.0, forgetting 0.1% ± 0.0; A-GEM accuracy 98.7% ± 0.1, forgetting 0.7% ± 0.1; Merged accuracy 96.9% ± 1.4, forgetting 0.4% ± 0.4; Experts (oracle id) accuracy 99.1% ± 0.1, forgetting 0.0% ± 0.0; Joint accuracy 99.3% ± 0.1.
 
-Domain-incremental: Naive accuracy 60.9% ± 0.9, forgetting 47.6% ± 1.2; Replay accuracy 93.4% ± 0.4, forgetting 6.9% ± 0.5; EWC accuracy 70.6% ± 2.0, forgetting 21.1% ± 1.7; LwF accuracy 75.2% ± 0.4, forgetting 16.2% ± 0.2; A-GEM accuracy 84.3% ± 0.9, forgetting 18.7% ± 1.1; Experts (oracle id) accuracy 99.1% ± 0.1, forgetting 0.0% ± 0.0; Experts (predicted id) accuracy 56.7% ± 0.4, forgetting 53.0% ± 0.5; Joint accuracy 98.2% ± 0.0.
+Domain-incremental: Naive accuracy 60.9% ± 0.9, forgetting 47.6% ± 1.2; Replay accuracy 93.4% ± 0.4, forgetting 6.9% ± 0.5; EWC accuracy 70.6% ± 2.0, forgetting 21.1% ± 1.7; LwF accuracy 75.2% ± 0.4, forgetting 16.2% ± 0.2; A-GEM accuracy 84.3% ± 0.9, forgetting 18.7% ± 1.1; Merged accuracy 68.7% ± 12.6, forgetting 8.6% ± 17.7; Experts (oracle id) accuracy 99.1% ± 0.1, forgetting 0.0% ± 0.0; Experts (predicted id) accuracy 56.7% ± 0.4, forgetting 53.0% ± 0.5; Joint accuracy 98.2% ± 0.0.
 
-Class-incremental: Naive accuracy 19.5% ± 0.1, forgetting 99.1% ± 0.0; Replay accuracy 87.8% ± 0.0, forgetting 12.4% ± 0.2; EWC accuracy 21.7% ± 3.8, forgetting 95.6% ± 4.5; LwF accuracy 26.0% ± 1.3, forgetting 52.8% ± 2.1; A-GEM accuracy 65.3% ± 1.7, forgetting 42.1% ± 2.1; Experts (oracle id) accuracy 98.9% ± 0.1, forgetting 0.0% ± 0.0; Experts (predicted id) accuracy 19.6% ± 0.0, forgetting 99.2% ± 0.1; Joint accuracy 96.4% ± 0.2.
+Class-incremental: Naive accuracy 19.5% ± 0.1, forgetting 99.1% ± 0.0; Replay accuracy 87.8% ± 0.0, forgetting 12.4% ± 0.2; EWC accuracy 21.7% ± 3.8, forgetting 95.6% ± 4.5; LwF accuracy 26.0% ± 1.3, forgetting 52.8% ± 2.1; A-GEM accuracy 65.3% ± 1.7, forgetting 42.1% ± 2.1; Merged accuracy 12.4%, forgetting 37.7% (2 of 3 repeats left the finite range); Experts (oracle id) accuracy 98.9% ± 0.1, forgetting 0.0% ± 0.0; Experts (predicted id) accuracy 19.6% ± 0.0, forgetting 99.2% ± 0.1; Joint accuracy 96.4% ± 0.2.
 
 Parameter counts, identical across seeds:
 
@@ -41,6 +41,9 @@ Parameter counts, identical across seeds:
 - Class-incremental, A-GEM: 269,322 parameters.
 - Class-incremental, Experts (oracle id): 1,346,610 parameters.
 - Class-incremental, Experts (predicted id): 1,614,647 parameters.
+- Task-incremental, Merged: 269,322 parameters.
+- Domain-incremental, Merged: 267,266 parameters.
+- Class-incremental, Merged: 269,322 parameters.
 
 ## Checks against the expected pattern
 

@@ -40,7 +40,7 @@ class ProtocolTest(unittest.TestCase):
         self.assertEqual(set(tasks[2]["labels"].tolist()), {4, 5})
 
     def test_domain_and_class_methods_do_not_receive_the_task_id(self) -> None:
-        blocked = ("naive", "joint", "replay", "ewc", "lwf", "agem", "experts_routed")
+        blocked = ("naive", "joint", "replay", "ewc", "lwf", "agem", "merged", "experts_routed")
         for method in blocked:
             self.assertFalse(uses_true_task_id("class", method))
             self.assertFalse(uses_true_task_id("domain", method))

@@ -3,12 +3,51 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from cl_toy.model import MLP, predict_logits
+
+
+@dataclass(frozen=True)
+class MethodPieces:
+    """Which of the three shared-network protections a method turns on.
+
+    The weight penalty, the frozen copy, and the step check are independent.
+    Replay still mixes stored photos into the batch, and that mix is not one of
+    these switches. Experts freeze a whole network per lesson and are not these
+    switches either.
+    """
+
+    ewc: bool = False
+    lwf: bool = False
+    agem: bool = False
+
+
+_NO_PIECES = MethodPieces()
+
+METHOD_PIECES: dict[str, MethodPieces] = {
+    "naive": _NO_PIECES,
+    "joint": _NO_PIECES,
+    "replay": _NO_PIECES,
+    "ewc": MethodPieces(ewc=True),
+    "lwf": MethodPieces(lwf=True),
+    "agem": MethodPieces(agem=True),
+    "merged": MethodPieces(ewc=True, lwf=True, agem=True),
+    "experts": _NO_PIECES,
+    "experts_routed": _NO_PIECES,
+}
+
+
+def pieces_for(method: str) -> MethodPieces:
+    """Return the switches for a known method. An unknown name raises."""
+    try:
+        return METHOD_PIECES[method]
+    except KeyError:
+        raise ValueError(f"Unknown method: {method}") from None
 
 
 def snapshot_params(model: nn.Module) -> dict[str, torch.Tensor]:
