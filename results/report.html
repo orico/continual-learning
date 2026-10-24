@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Split MNIST continual learning</title>
+<style>
+  :root {
+    --ink: #1c1915;
+    --muted: #5c564c;
+    --line: #e4ddd2;
+    --paper: #faf7f2;
+    --card: #fffdf9;
+    --accent: #1f4b6e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 18px/1.5 "Iowan Old Style", Palatino, Georgia, serif;
+  }
+  main {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+  h1 {
+    font-size: 2.1rem;
+    line-height: 1.15;
+    font-weight: 600;
+    margin: 0 0 12px;
+  }
+  h2 {
+    font-size: 1.45rem;
+    font-weight: 600;
+    margin: 56px 0 8px;
+    color: var(--accent);
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 28px 0 4px;
+  }
+  p, li { margin: 0; }
+  .lead { font-size: 1.2rem; max-width: 38em; }
+  section > p + p,
+  .stack > p + p,
+  .note + .note { margin-top: 10px; }
+  figure {
+    margin: 18px 0 8px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  img { width: 100%; height: auto; display: block; }
+  figcaption, .say {
+    color: var(--ink);
+    margin-top: 10px;
+  }
+  ul, ol { padding-left: 1.2em; }
+  li + li { margin-top: 8px; }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 12px;
+  }
+  .kicker {
+    color: var(--muted);
+    font-variant: small-caps;
+    letter-spacing: 0.04em;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+  strong { font-weight: 650; }
+  .table-wrap {
+    overflow-x: auto;
+    margin-top: 14px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  tr:last-child td { border-bottom: none; }
+  th {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.82rem;
+  }
+  td.num, th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Split MNIST continual learning</h1>
+  <p class="lead">One network learns handwritten digits five lessons in a row, and this page shows each lesson, each question it was asked, and how much of the earlier lessons survived.</p>
+
+  <h2>The five lessons</h2>
+  <figure>
+    <img src="figures/split_mnist_examples.png" alt="Five rows of handwritten digits, one pair of digits per row.">
+    <figcaption>Each row is one lesson, taught from top to bottom, and while that lesson is running the network sees only that pair.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Lesson</th><th>Photos in that lesson</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Thousands of 0s and 1s, shuffled together.</td></tr>
+        <tr><td>2</td><td>2s and 3s, and this lesson starts only after lesson 1 has finished.</td></tr>
+        <tr><td>3</td><td>4s and 5s.</td></tr>
+        <tr><td>4</td><td>6s and 7s.</td></tr>
+        <tr><td>5</td><td>8s and 9s.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>What goes in, and what must come out</h2>
+  <figure>
+    <img src="figures/incremental_input_output.png" alt="The digits 0 through 9, each graded three ways.">
+    <figcaption>The same ten photos are used in all three tests, and each column is one photo.</figcaption>
+  </figure>
+  <p>The input is the pixels of that one photo, a dark box is the required answer, and a pale box is another answer still allowed for that same photo.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Photo</th><th>Told the lesson</th><th>Even or odd</th><th>Name the digit</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>0</td><td>0, and 1 is also allowed</td><td>even</td><td>0</td></tr>
+        <tr><td>1</td><td>1, and 0 is also allowed</td><td>odd</td><td>1</td></tr>
+        <tr><td>2</td><td>2, and 3 is also allowed</td><td>even</td><td>2</td></tr>
+        <tr><td>3</td><td>3, and 2 is also allowed</td><td>odd</td><td>3</td></tr>
+        <tr><td>4</td><td>4, and 5 is also allowed</td><td>even</td><td>4</td></tr>
+        <tr><td>5</td><td>5, and 4 is also allowed</td><td>odd</td><td>5</td></tr>
+        <tr><td>6</td><td>6, and 7 is also allowed</td><td>even</td><td>6</td></tr>
+        <tr><td>7</td><td>7, and 6 is also allowed</td><td>odd</td><td>7</td></tr>
+        <tr><td>8</td><td>8, and 9 is also allowed</td><td>even</td><td>8</td></tr>
+        <tr><td>9</td><td>9, and 8 is also allowed</td><td>odd</td><td>9</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>How a score is made</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Word</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Lesson</td><td>Two passes through that lesson's training photos, in batches of about 128, and each batch is one ordinary training step.</td></tr>
+        <tr><td>Score</td><td>A separate pile of photos of the same digits, photos that never moved the weights.</td></tr>
+        <tr><td>After a lesson</td><td>Every lesson taught so far is scored, and later lessons are still withheld.</td></tr>
+        <tr><td>Final accuracy</td><td>The average of those scores after lesson 5.</td></tr>
+        <tr><td>Forgetting</td><td>The drop from a lesson's score at the moment that lesson ended to its score after lesson 5.</td></tr>
+        <tr><td>±</td><td>How far three repeats with different random starts spread around the average.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>The trick in each method</h2>
+  <p>Plain training is the forgetting, because the next lesson moves the same weights. The other rows are the claimed fixes, included so we can see which of them actually keep the old lessons.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Method</th><th>Role</th><th>The trick</th></tr></thead>
+      <tbody>
+        <tr><td>Naive</td><td>The forgetting</td><td>Keep training the same weights on the next lesson, and the old answers get worse.</td></tr>
+        <tr><td>Replay</td><td>The ordinary protection</td><td>Keep about 500 old photos and mix them into later lessons, so those digits still get practice.</td></tr>
+        <tr><td>EWC</td><td>Weight regularization</td><td>Save the weights after a lesson, mark which ones that lesson needed, and charge extra for moving those.</td></tr>
+        <tr><td>LwF</td><td>Answer regularization</td><td>Freeze a copy of the network, and on each new photo pull the live network toward what that copy would say.</td></tr>
+        <tr><td>A-GEM</td><td>A check on the step</td><td>Keep old photos only as a test of the step, and tilt the step when it would make those photos worse.</td></tr>
+        <tr><td>Experts, told the lesson</td><td>A separate network per lesson</td><td>Freeze each lesson's network when it ends, and let the lesson tag choose which network answers.</td></tr>
+        <tr><td>Experts, guessing the lesson</td><td>Same networks, no tag</td><td>The frozen networks stay, and a second network guesses the lesson from the photo, then itself forgets.</td></tr>
+        <tr><td>Joint</td><td>All lessons at once</td><td>Shuffle every lesson into one pile, so no lesson arrives late enough to overwrite another.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Scores after each lesson</h2>
+  <figure>
+    <img src="figures/forgetting_matrices_class.png" alt="Seven heatmaps of class-incremental accuracy after each task.">
+    <figcaption>On the ten-digit test, each square is the share of that lesson's test photos still answered correctly after the lesson named on the left, and yellow is a high score.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Panel</th><th>What the squares do on the ten-digit test</th></tr></thead>
+      <tbody>
+        <tr><td>Naive</td><td>Earlier lessons go black as soon as the next lesson starts, and the bright diagonal is only the lesson just finished, near 0.98 to 1.00.</td></tr>
+        <tr><td>Replay</td><td>Old lessons stay yellow, and at the end lesson 1 is still about 0.92 while the last lesson is about 0.96.</td></tr>
+        <tr><td>EWC</td><td>Old lessons fall to about 0, with a small remainder of about 0.13 on lesson 4.</td></tr>
+        <tr><td>LwF</td><td>Pieces of the early lessons linger, then go dark, and the last lesson stays near 0.95.</td></tr>
+        <tr><td>A-GEM</td><td>Old lessons fade instead of vanishing, and lesson 1 is still about 0.75 at the end.</td></tr>
+        <tr><td>Experts, told</td><td>Every square stays near 1.00, because each lesson's network is never trained again.</td></tr>
+        <tr><td>Experts, guessing</td><td>Later photos go to the newest network, so every earlier lesson ends at about 0.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Accuracy as the lessons arrive</h2>
+  <figure>
+    <img src="figures/accuracy_curves.png" alt="Three line charts of average accuracy after each task.">
+    <figcaption>Each line is the average score on the lessons taught so far, and the pale band is the spread across the three repeats.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Panel</th><th>What the lines do</th></tr></thead>
+      <tbody>
+        <tr><td>Told the lesson</td><td>Every method stays near 100% from the first lesson through the fifth.</td></tr>
+        <tr><td>Even or odd</td><td>Plain training falls to 60.9%, replay stays at 93.4%, and the told expert stays next to the shuffled line at 98.2%.</td></tr>
+        <tr><td>Name the digit</td><td>Plain training falls to about 20% by the second lesson and stays there, replay stays near 88%, and shuffled training finishes at 96.4%.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>The end of all five lessons</h2>
+  <figure>
+    <img src="figures/final_bars.png" alt="Bar charts of final accuracy and forgetting for each method.">
+    <figcaption>The top chart is the final average score, and the bottom chart is how many points the earlier lessons lost.</figcaption>
+  </figure>
+  <p>Each number is the average of three repeats, and the second number in a cell is the points lost on earlier lessons. Rows run from the strongest ten-digit score to the weakest.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th class="num">Told the lesson</th>
+          <th class="num">Even or odd</th>
+          <th class="num">Name the digit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Experts, told</td><td class="num">99.1% ± 0.1, forgot 0.0</td><td class="num">99.1% ± 0.1, forgot 0.0</td><td class="num">98.9% ± 0.1, forgot 0.0</td></tr>
+        <tr><td>Joint</td><td class="num">99.3% ± 0.1</td><td class="num">98.2% ± 0.0</td><td class="num">96.4% ± 0.2</td></tr>
+        <tr><td>Replay</td><td class="num">98.5% ± 0.1, forgot 0.6</td><td class="num">93.4% ± 0.4, forgot 6.9</td><td class="num">87.8% ± 0.0, forgot 12.4</td></tr>
+        <tr><td>A-GEM</td><td class="num">98.7% ± 0.1, forgot 0.7</td><td class="num">84.3% ± 0.9, forgot 18.7</td><td class="num">65.3% ± 1.7, forgot 42.1</td></tr>
+        <tr><td>LwF</td><td class="num">99.2% ± 0.0, forgot 0.1</td><td class="num">75.2% ± 0.4, forgot 16.2</td><td class="num">26.0% ± 1.3, forgot 52.8</td></tr>
+        <tr><td>EWC</td><td class="num">97.7% ± 0.3, forgot 0.0</td><td class="num">70.6% ± 2.0, forgot 21.1</td><td class="num">21.7% ± 3.8, forgot 95.6</td></tr>
+        <tr><td>Experts, guessing</td><td class="num">not run</td><td class="num">56.7% ± 0.4, forgot 53.0</td><td class="num">19.6% ± 0.0, forgot 99.2</td></tr>
+        <tr><td>Naive</td><td class="num">98.4% ± 0.1, forgot 1.1</td><td class="num">60.9% ± 0.9, forgot 47.6</td><td class="num">19.5% ± 0.1, forgot 99.1</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The told expert uses about 1.3 million weights, and the shared network uses about 270 thousand.</p>
+  <p>Joint has no forgetting number because the lessons were shuffled together.</p>
+
+  <h2>Why these methods are here</h2>
+  <p>Slowing forgetting is not how the forgetting is produced. Plain training produces it, and each other method is a claimed way to keep the earlier lessons. Rows follow the same order as the score table, strongest ten-digit result first.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Method</th><th>What the step is doing</th><th>What the ten-digit scores showed</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Experts, told</td>
+          <td>Each lesson is frozen in its own network, so a later lesson cannot change it, and the lesson tag picks which network answers.</td>
+          <td>It stays at 98.9% and does not forget, because those weights never move again.</td>
+        </tr>
+        <tr>
+          <td>Joint</td>
+          <td>The same photos are learned all at once, so no lesson arrives late enough to overwrite another.</td>
+          <td>It finishes at 96.4%, and the gap beneath that score is the cost of teaching one lesson after another.</td>
+        </tr>
+        <tr>
+          <td>Replay</td>
+          <td>A few hundred old photos stay in the later batches, so those digits keep getting practice.</td>
+          <td>Old lessons stay near the top, and the final score is 87.8%.</td>
+        </tr>
+        <tr>
+          <td>A-GEM</td>
+          <td>A training step is a shove of the weights, and tilting it takes out the part of the shove that would make the stored old photos worse.</td>
+          <td>The tilt keeps some of the old photos, so the score rises to 65.3%, and 42 points of forgetting remain.</td>
+        </tr>
+        <tr>
+          <td>LwF</td>
+          <td>The frozen copy is the memory of the old answers, and the live network is pulled back whenever a new photo makes it disagree with that copy.</td>
+          <td>That pull only lifts the final score from about 20% to 26.0%.</td>
+        </tr>
+        <tr>
+          <td>EWC</td>
+          <td>The new lesson still moves the weights, but the ones the old lesson needed cost more to move, so the new lesson mostly changes the others.</td>
+          <td>That extra charge does not stop the collapse, and the final score stays near plain training at 21.7%.</td>
+        </tr>
+        <tr>
+          <td>Experts, guessing</td>
+          <td>The frozen networks stay, and a second network has to guess which one to ask.</td>
+          <td>The guesser sends photos to the newest network, so the score falls to 19.6%, the same collapse as plain training.</td>
+        </tr>
+        <tr>
+          <td>Naive</td>
+          <td>The next lesson moves the same weights, so the old answers get worse.</td>
+          <td>Old lessons collapse, and the final score is 19.5%.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>How fast lesson 1 disappears</h2>
+  <figure>
+    <img src="figures/forgetting_speed.png" alt="Accuracy on task 1 during training of task 2.">
+    <figcaption>This chart rescores lesson 1's test photos after every training step of lesson 2, on the ten-digit question.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Method</th><th>Lesson 1 while lesson 2 is training</th></tr></thead>
+      <tbody>
+        <tr><td>Naive</td><td>Falls from 99.9% to 0% within 19 steps, then stays at 0%.</td></tr>
+        <tr><td>EWC</td><td>Falls to 0% on the same early steps, then stays at 0%.</td></tr>
+        <tr><td>Replay</td><td>Dips during those early steps, then climbs back near the top.</td></tr>
+        <tr><td>A-GEM</td><td>Stays near the top for the whole of lesson 2.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Turning the EWC penalty up</h2>
+  <figure>
+    <img src="figures/ewc_lambda.png" alt="Accuracy of the first task, earlier tasks, and the last task as the EWC penalty grows.">
+    <figcaption>Each point is one strength of the penalty, from a very light pull to a very heavy one, on a single repeat.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Penalty</th><th>Told the lesson</th><th>Name the digit</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Lightest</td><td>Lesson 1 stays at 100%, and the last lesson is 97.5%.</td><td>Old lessons stay near 0%, and the last lesson is 96.8%.</td></tr>
+        <tr><td>Heaviest</td><td>Lesson 1 stays at 99.9%, and the last lesson falls to 90.9%.</td><td>Old lessons stay at 0%, and the last lesson falls to 50.9%.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>A larger pile of old photos</h2>
+  <figure>
+    <img src="figures/replay_buffer.png" alt="Final accuracy and forgetting as the replay buffer grows.">
+    <figcaption>The blue line is the final digit-naming score, the orange line is forgetting, and the dashed line is shuffled training at 96.4%.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th class="num">Old photos kept</th><th class="num">Final digit score</th><th class="num">Forgetting</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">50</td><td class="num">59.6%</td><td class="num">48.9</td></tr>
+        <tr><td class="num">200</td><td class="num">80.2%</td><td class="num">22.7</td></tr>
+        <tr><td class="num">500</td><td class="num">87.7%</td><td class="num">12.7</td></tr>
+        <tr><td class="num">1,000</td><td class="num">90.2%</td><td class="num">9.3</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The largest pile is the closest of the four to shuffled training at 96.4%.</p>
+
+  <h2>One pass instead of two</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Method</th><th class="num">Digit score after one pass</th><th class="num">Forgetting</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Naive</td><td class="num">19.3%</td><td class="num">98.9</td></tr>
+        <tr><td>Replay</td><td class="num">86.3%</td><td class="num">13.2</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>
